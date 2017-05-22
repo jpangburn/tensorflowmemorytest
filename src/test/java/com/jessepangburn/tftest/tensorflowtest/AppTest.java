@@ -30,7 +30,8 @@ public class AppTest
 		try (Graph g = new Graph(); Session s = new Session(g)) {
 			// create a placeholder x and a const for the dimension to do a cumulative sum along
 			Output x = g.opBuilder("Placeholder", "x").setAttr("dtype", DataType.FLOAT).build().output(0);
-			Output dims = g.opBuilder("Const", "dims").setAttr("dtype", DataType.INT32).setAttr("value", Tensor.create(0)).build().output(0);
+			Tensor zero = Tensor.create(0);
+			Output dims = g.opBuilder("Const", "dims").setAttr("dtype", DataType.INT32).setAttr("value", zero).build().output(0);
 			Output y = g.opBuilder("Cumsum", "y").addInput(x).addInput(dims).build().output(0);
 			// loop a bunch to test memory usage
 			for (int i=0; i<10000000; i++){
@@ -42,7 +43,7 @@ public class AppTest
 				tx.close();
 				ty.close();
 			}
-
+			zero.close();
 			System.out.println("non-threaded test finished");
 		}
 	}
@@ -54,7 +55,8 @@ public class AppTest
 		// create a graph and session
 		try (Graph g = new Graph(); Session s = new Session(g)) {
 			Output x = g.opBuilder("Placeholder", "x").setAttr("dtype", DataType.FLOAT).build().output(0);
-			Output dims = g.opBuilder("Const", "dims").setAttr("dtype", DataType.INT32).setAttr("value", Tensor.create(0)).build().output(0);
+			Tensor zero = Tensor.create(0);
+			Output dims = g.opBuilder("Const", "dims").setAttr("dtype", DataType.INT32).setAttr("value", zero).build().output(0);
 			Output y = g.opBuilder("Cumsum", "y").addInput(x).addInput(dims).build().output(0);
 			// make threads to do BusyWork with this graph
 			List<Thread> threads = new LinkedList<Thread>();
@@ -67,6 +69,7 @@ public class AppTest
 			for (Thread thread : threads){
 				thread.join();
 			}
+			zero.close();
 			System.out.println("threaded test finished");
 		}
 	}
@@ -80,11 +83,12 @@ public class AppTest
 		
 		@Override
 		public void run() {
-			for (int i=0; i<10000000; i++){
+			for (int i=0; i<1000000000; i++){
 				Tensor tx = Tensor.create(X);
-				Tensor ty = this.s.runner().feed("x", tx).fetch("y").run().get(0);
+				List<Tensor> results = this.s.runner().feed("x", tx).fetch("y").run();
 				tx.close();
-				ty.close();
+				for (Tensor result : results)
+					result.close();
 			}
 			System.out.println("thread finished - " + Thread.currentThread().getName());
 		}
